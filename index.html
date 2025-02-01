@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* Previous CSS remains the same */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .search-container {
+            position: relative;
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        input {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            margin-top: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .suggestion-item {
+            padding: 10px 15px;
+            color: #333;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .suggestion-item:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Rest of previous CSS remains unchanged */
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 12px;
+            background: #4f46e5;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #4338ca;
+        }
+
+        .weather-info {
+            color: white;
+            display: none;
+        }
+
+        .current-weather {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .temperature {
+            font-size: 72px;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+
+        .condition {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .location {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .detail-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .detail-card h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .detail-card p {
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .weather-icon {
+            width: 100px;
+            height: 100px;
+        }
+
+        .error {
+            color: #ff6b6b;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="search-container">
+            <input type="text" placeholder="Enter city name..." id="cityInput">
+            <div class="suggestions" id="suggestions"></div>
+            <button onclick="getWeather()">Search</button>
+        </div>
+        <div class="error" id="errorMsg">City not found!</div>
+        <div class="weather-info" id="weatherInfo">
+            <div class="current-weather">
+                <div class="location" id="location">London, UK</div>
+                <div class="temperature" id="temperature">20°C</div>
+                <div class="condition" id="condition">Partly cloudy</div>
+                <img src="" alt="Weather Icon" class="weather-icon" id="weatherIcon">
+            </div>
+            <div class="details">
+                <div class="detail-card">
+                    <h3>Humidity</h3>
+                    <p id="humidity">65%</p>
+                </div>
+                <div class="detail-card">
+                    <h3>Wind Speed</h3>
+                    <p id="windSpeed">12 km/h</p>
+                </div>
+                <div class="detail-card">
+                    <h3>Feels Like</h3>
+                    <p id="feelsLike">22°C</p>
+                </div>
+                <div class="detail-card">
+                    <h3>Last Updated</h3>
+                    <p id="lastUpdated">12:00 PM</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = '355c768857dc412ca1a35231250102';
+        const weatherInfo = document.getElementById('weatherInfo');
+        const errorMsg = document.getElementById('errorMsg');
+        const cityInput = document.getElementById('cityInput');
+        const suggestions = document.getElementById('suggestions');
+        let timeoutId;
+
+        // Autocomplete function with debounce
+        async function getSuggestions(query) {
+            try {
+                const response = await fetch(
+                    `https://api.weatherapi.com/v1/search.json?key=${apiKey}&q=${encodeURIComponent(query)}`
+                );
+                
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                showSuggestions(data);
+            } catch (error) {
+                console.error('Error fetching suggestions:', error);
+            }
+        }
+
+        function showSuggestions(cities) {
+            suggestions.innerHTML = '';
+            if (!cities || cities.length === 0) return;
+
+            cities.forEach(city => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.textContent = `${city.name}, ${city.country}`;
+                div.onclick = () => {
+                    cityInput.value = `${city.name}, ${city.country}`;
+                    suggestions.style.display = 'none';
+                    getWeather();
+                };
+                suggestions.appendChild(div);
+            });
+            suggestions.style.display = 'block';
+        }
+
+        async function getWeather() {
+            const query = cityInput.value.trim();
+            if (!query) return;
+
+            try {
+                const response = await fetch(
+                    `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${encodeURIComponent(query)}&aqi=yes`
+                );
+                
+                if (!response.ok) throw new Error('City not found');
+                
+                const data = await response.json();
+                displayWeather(data);
+            } catch (error) {
+                showError();
+            }
+        }
+
+        function displayWeather(data) {
+            errorMsg.style.display = 'none';
+            weatherInfo.style.display = 'block';
+
+            document.getElementById('location').textContent = `${data.location.name}, ${data.location.country}`;
+            document.getElementById('temperature').textContent = `${data.current.temp_c}°C`;
+            document.getElementById('condition').textContent = data.current.condition.text;
+            document.getElementById('humidity').textContent = `${data.current.humidity}%`;
+            document.getElementById('windSpeed').textContent = `${data.current.wind_kph} km/h`;
+            document.getElementById('feelsLike').textContent = `${data.current.feelslike_c}°C`;
+            document.getElementById('lastUpdated').textContent = new Date(data.current.last_updated).toLocaleTimeString();
+            document.getElementById('weatherIcon').src = data.current.condition.icon;
+        }
+
+        function showError() {
+            weatherInfo.style.display = 'none';
+            errorMsg.style.display = 'block';
+        }
+
+        // Event Listeners
+        cityInput.addEventListener('input', (e) => {
+            clearTimeout(timeoutId);
+            const query = e.target.value.trim();
+            if (query.length < 3) {
+                suggestions.style.display = 'none';
+                return;
+            }
+            timeoutId = setTimeout(() => getSuggestions(query), 300);
+        });
+
+        cityInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') getWeather();
+        });
+
+        // Close suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-container')) {
+                suggestions.style.display = 'none';
+            }
+        });
+
+        // Initial load
+        getWeather();
+    </script>
+</body>
+</html>
